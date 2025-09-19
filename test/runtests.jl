@@ -16,14 +16,13 @@ function test_throws_with(msg, f; contains)
     try
         f()
     catch e
-        # showerror only works on 1.11 :(
         estr = sprint(showerror, e)
-        contains && @test occursin(msg, estr)
+        contains & @test occursin(msg, estr)
         !contains && @test !occursin(msg, estr)
         return
     end
-    # Julia 1.6 doesn't have try-else, so we have to put a return
-    # in the catch and do this outside
+    # Fail if no error was thrown. Julia 1.6 doesn't have try-else, so we have to put a
+    # return in the catch and do this outside
     @test false
 end
 
