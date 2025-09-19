@@ -20,6 +20,13 @@ my error message
 Stacktrace:
  [1] top-level scope
    @ REPL[4]:1
+
+julia> foo1("hello")  # No hint here as it doesn't match the signature with the hint
+ERROR: MethodError: no method matching foo1(::String)
+The function `foo1` exists, but no method is defined for this combination of argument types.
+Stacktrace:
+ [1] top-level scope
+   @ REPL[5]:1
 ```
 
 The macro takes two mandatory arguments (which must come first):
