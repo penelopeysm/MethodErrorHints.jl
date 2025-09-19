@@ -3,8 +3,9 @@
 
 A Julia package providing a macro to register custom hint messages for `MethodError`s.
 
-This package exports a single macro, [@method_error_hint](@ref), which allows you to register
-custom hint messages to be displayed when a `MethodError` is thrown for a function call
+This package exports a single macro, [MethodErrorHints.@method_error_hint](@ref), which
+allows you to register custom hint messages to be displayed when a `MethodError` is thrown
+for a function call.
 """
 module MethodErrorHints
 
