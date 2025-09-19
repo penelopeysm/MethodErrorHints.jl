@@ -1,5 +1,7 @@
 # MethodErrorHints.jl
 
+[**Documentation**](https://pysm.dev/MethodErrorHints.jl/)
+
 This package exports a single macro, `@method_error_hint`, which lets you define error hints for specific function methods.
 
 For example, the code below will print "my error message" in blue when `foo1(1)` is called.
