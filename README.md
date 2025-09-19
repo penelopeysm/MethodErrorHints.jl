@@ -1,0 +1,3 @@
+# MethodErrorHints.jl
+
+Foo
