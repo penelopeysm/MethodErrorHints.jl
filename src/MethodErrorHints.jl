@@ -10,20 +10,40 @@ macro method_error_hint(args...)
     return _method_error_hint(expr, msg, printstyled_kwargs)
 end
 
-# The kwargs passed into `register_error_hint` are a list of (symbol, type) tuples
-# (but they have type Vector{Any})
-function __kwarg_matches_type(
-    kwarg_list::Vector{Any},
-    kwarg_sym::Symbol,
-    expected_type::Type,
-)
-    for (sym, type) in kwarg_list
-        if sym === kwarg_sym
-            return type <: expected_type
+@static if VERSION >= v"1.11"
+    # On Julia 1.11, the kwargs passed into `register_error_hint` are a list of (symbol,
+    # type) tuples (but they have type Vector{Any})
+    function __kwarg_matches_type(
+        kwarg_list::Vector{Any},
+        kwarg_sym::Symbol,
+        expected_type::Type,
+    )
+        for (sym, type) in kwarg_list
+            if sym === kwarg_sym
+                return type <: expected_type
+            end
         end
+        return false
     end
-    return false
+elseif VERSION >= v"1.6"
+    # On Julia 1.6 - 1.10 it's some weird internal Base.Iterators.Pairs type, which when
+    # `collect`ed gives a Vector{Pair} that can be iterated over as usual.
+    # In 1.10 it's also available as Base.Pairs but not on 1.6, so to cover all these
+    # we just use Base.Iterators.Pairs.
+    function __kwarg_matches_type(
+        kwarg_dict::Base.Iterators.Pairs,
+        kwarg_sym::Symbol,
+        expected_type::Type,
+    )
+        for (sym, val) in collect(kwarg_dict)
+            if sym === kwarg_sym
+                return val isa expected_type
+            end
+        end
+        return false
+    end
 end
+
 
 function _method_error_hint(expr::Expr, msg, printstyled_kwargs::Tuple)::Expr
     # Input validation
@@ -155,7 +175,6 @@ function _method_error_hint(expr::Expr, msg, printstyled_kwargs::Tuple)::Expr
                 ($kwarg_type_check_expr)
             )
             if is_target_method
-                # TODO: are the kwargs correct here?
                 println(io)
                 printstyled(io, $(esc(msg)); $ps_kwargs_dict...)
             end
