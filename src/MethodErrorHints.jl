@@ -4,8 +4,8 @@ module MethodErrorHints
     @method_error_hint f(x, y::T, args...) msg
 """
 macro method_error_hint(args...)
-    expr::Expr = args[1]
-    msg::String = args[2]
+    expr = args[1]
+    msg = args[2]
     printstyled_kwargs = args[3:end]
     return _method_error_hint(expr, msg, printstyled_kwargs)
 end
@@ -25,7 +25,7 @@ function __kwarg_matches_type(
     return false
 end
 
-function _method_error_hint(expr::Expr, msg::String, printstyled_kwargs::Tuple)::Expr
+function _method_error_hint(expr::Expr, msg, printstyled_kwargs::Tuple)::Expr
     # Input validation
     # TODO: Type parameters don't work e.g. `f(x::T, y::T) where {T}`
     expr.head === :call || error("@method_error_hint must be applied to a function call")
@@ -58,7 +58,7 @@ function _method_error_hint(expr::Expr, msg::String, printstyled_kwargs::Tuple):
     fname_check_expr = :(exc.f === $(esc(fname)))
 
     # Decide which arguments of `expr` are positional and which are keyword
-    has_kwargs = expr.args[2].head === :parameters
+    has_kwargs = expr.args[2] isa Expr && expr.args[2].head === :parameters
     (arg_exprs, kwarg_exprs) = if has_kwargs
         expr.args[3:end], expr.args[2].args
     else
@@ -74,8 +74,8 @@ function _method_error_hint(expr::Expr, msg::String, printstyled_kwargs::Tuple):
             # `x`
             push!(target_argtypes, :Any)
         elseif arg_expr.head === :(::)
-            # `x::T`
-            push!(target_argtypes, :($(esc(arg_expr.args[2]))))
+            # `x::T` or `::T`
+            push!(target_argtypes, :($(esc(last(arg_expr.args)))))
         elseif arg_expr.head === :(...)
             # `args...`
             # TODO: Vararg{T} not supported I think
@@ -101,9 +101,7 @@ function _method_error_hint(expr::Expr, msg::String, printstyled_kwargs::Tuple):
         foldl((a, b) -> :($a && $b), satisfies_exprs)
     end
 
-    # TODO: Handle kwargs
-    @show kwarg_exprs
-
+    # Determine number and types of keyword arguments
     n_kwargs = length(kwarg_exprs)
     target_kwargtypes = Dict{Symbol,Any}()
     has_varkwargs = false
@@ -113,6 +111,8 @@ function _method_error_hint(expr::Expr, msg::String, printstyled_kwargs::Tuple):
             target_kwargtypes[kwarg_expr] = :Any
         elseif kwarg_expr.head === :(::)
             # `x::T`
+            length(kwarg_expr.args) == 2 ||
+                error("keyword argument type specification must be of the form `x::T`")
             target_kwargtypes[kwarg_expr.args[1]] = :($(esc(kwarg_expr.args[2])))
         elseif kwarg_expr.head === :(...)
             if i == n_kwargs
