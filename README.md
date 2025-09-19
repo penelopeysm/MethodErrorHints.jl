@@ -11,12 +11,12 @@ julia> using MethodErrorHints
 julia> function foo1 end
 foo1 (generic function with 0 methods)
 
-julia> @method_error_hint foo1(x::Int) "hi" color=:blue
+julia> @method_error_hint foo1(x::Int) "my error message" color=:blue
 
 julia> foo1(1)
 ERROR: MethodError: no method matching foo1(::Int64)
 The function `foo1` exists, but no method is defined for this combination of argument types.
-hi
+my error message
 Stacktrace:
  [1] top-level scope
    @ REPL[4]:1
