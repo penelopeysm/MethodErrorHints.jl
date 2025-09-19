@@ -17,7 +17,7 @@ function test_throws_with(msg, f; contains)
         f()
     catch e
         estr = sprint(showerror, e)
-        contains & @test occursin(msg, estr)
+        contains && @test occursin(msg, estr)
         !contains && @test !occursin(msg, estr)
         return
     end
@@ -28,6 +28,16 @@ end
 
 
 @testset verbose = true "MethodErrorHints.jl" begin
+    @testset verbose = true "no args/kwargs" begin
+        function fooempty end
+        m = "__fooempty__"
+        @method_error_hint fooempty() m
+        test_throws_with(m, () -> fooempty(); contains = true)
+        test_throws_with(m, () -> fooempty(1); contains = false)
+        test_throws_with(m, () -> fooempty("hello"); contains = false)
+        test_throws_with(m, () -> fooempty(; x = 1); contains = false)
+    end
+
     @testset verbose = true "x::T" begin
         @testset "types in Base" begin
             function foo1 end

@@ -164,9 +164,6 @@ function _method_error_hint(expr::Expr, msg, printstyled_kwargs::Tuple)::Expr
         "@method_error_hint does not support type parameters and `where` clauses in the method signature",
     )
     expr.head === :call || error("@method_error_hint must be applied to a function call")
-    length(expr.args) == 1 && error(
-        "@method_error_hint must be applied to a function call with at least one argument",
-    )
 
     # Wrangle the keyword arguments to be forwarded to `printstyled`
     ps_kwargs_dict = :(Dict{Symbol,Any}())
@@ -192,11 +189,17 @@ function _method_error_hint(expr::Expr, msg, printstyled_kwargs::Tuple)::Expr
     fname = expr.args[1]
     fname_check_expr = :(exc.f === $(esc(fname)))
 
-    # Decide which arguments of `expr` are positional and which are keyword
-    has_kwargs = expr.args[2] isa Expr && expr.args[2].head === :parameters
-    (arg_exprs, kwarg_exprs) = if has_kwargs
+    # Decide which arguments of `expr` are positional and which are keyword. If keyword
+    # arguments are present, they are always grouped together as the second argument, with a
+    # head of :parameters. Any remaining arguments are positional.
+    (arg_exprs, kwarg_exprs) = if length(expr.args) == 1
+        # no arguments at all
+        [], ()
+    elseif expr.args[2] isa Expr && expr.args[2].head === :parameters
+        # there are keyword arguments
         expr.args[3:end], expr.args[2].args
     else
+        # no keyword arguments
         expr.args[2:end], ()
     end
 
