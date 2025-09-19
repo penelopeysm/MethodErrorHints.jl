@@ -3,15 +3,23 @@
 This package exports a single macro, `@method_error_hint`, which lets you define error hints for specific function methods.
 
 For example, the code below will print "my error message" in blue when `foo1(1)` is called.
+(GitHub can't show you the coloured output, but if you run this in a Julia REPL you will see it.)
 
 ```julia
-using MethodErrorHints
+julia> using MethodErrorHints
 
-function foo end
+julia> function foo1 end
+foo1 (generic function with 0 methods)
 
-@method_error_hint foo(x::Int) "my error message" color=:blue
+julia> @method_error_hint foo1(x::Int) "hi" color=:blue
 
-foo1(1)
+julia> foo1(1)
+ERROR: MethodError: no method matching foo1(::Int64)
+The function `foo1` exists, but no method is defined for this combination of argument types.
+hi
+Stacktrace:
+ [1] top-level scope
+   @ REPL[4]:1
 ```
 
 The macro takes two mandatory arguments (which must come first):
