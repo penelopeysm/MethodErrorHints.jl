@@ -47,6 +47,7 @@ not. For the most part, the rules exactly mimic method dispatch in Julia, with s
 exceptions noted in the next section.
 
 ```julia
+function f1 end
 @method_error_hint f1(x::Int, y; z::String) "My error hint" color=:red
 # f1(3,   :a ; z="hello"     ) ✔
 # f1(3,   2  ; z="hello"     ) ✔
@@ -58,6 +59,7 @@ exceptions noted in the next section.
 ```
 
 ```julia
+function f2 end
 @method_error_hint f2(x; z::Int=3) "Another error hint" bold=true
 # f2(3                )  ✔
 # f2(3     ; z=2      )  ✔
@@ -67,6 +69,7 @@ exceptions noted in the next section.
 ```
 
 ```julia
+function f3 end
 @method_error_hint f3(args...; kwargs...) "Another hint" italic=true
 # Any invocation of `f3` will trigger this.
 ```
@@ -105,7 +108,7 @@ Base.Experimental.register_error_hint(MethodError) do io, exc, argtypes, kwargs
         && argtypes[1] <: Int
         && argtypes[2] <: Any
         && length(kwargs) == 1
-        && MethodErrorHints.__kwarg_matches_type(kwargs, :z, String)
+        && MethodErrorHints.__kwarg_permitted(kwargs, :z, String)
     )
     if is_target_method
         println(io)
@@ -127,34 +130,43 @@ end
 @static if VERSION >= v"1.11"
     # On Julia 1.11, the kwargs passed into `register_error_hint` are a list of (symbol,
     # type) tuples (but they have type Vector{Any})
-    function __kwarg_matches_type(
-        kwarg_list::Vector{Any},
+    __kwargs_symbols(v::Vector{Any})::Vector{Symbol} = map(first, v)
+    function __kwarg_permitted(
+        target_kwargs::Dict{Symbol,Any},
+        has_varkwargs::Bool,
         kwarg_sym::Symbol,
-        expected_type::Type,
+        kwarg_type::Type,
     )
-        for (sym, type) in kwarg_list
-            if sym === kwarg_sym
-                return type <: expected_type
-            end
+        return if haskey(target_kwargs, kwarg_sym)
+            # If the method signature explicitly requires this kwarg, check that its type is
+            # correct.
+            kwarg_type <: target_kwargs[kwarg_sym][2]
+        else
+            # Otherwise, the only way it can be permitted is if the method signature has
+            # `kwargs...`.
+            has_varkwargs
         end
-        return false
     end
 elseif VERSION >= v"1.6"
     # On Julia 1.6 - 1.10 it's some weird internal Base.Iterators.Pairs type, which when
-    # `collect`ed gives a Vector{Pair} that can be iterated over as usual.
-    # In 1.10 it's also available as Base.Pairs but not on 1.6, so to cover all these
-    # we just use Base.Iterators.Pairs.
-    function __kwarg_matches_type(
-        kwarg_dict::Base.Iterators.Pairs,
+    # `collect`ed gives a Vector{Pair} that can be iterated over as usual. Note that the
+    # second element of the Pair is the value of the keyword argument, not the type. In 1.10
+    # it's also available as Base.Pairs but not on 1.6, so to cover all these we just use
+    # Base.Iterators.Pairs.
+    __kwargs_symbols(v::Base.Iterators.Pairs)::Vector{Symbol} = map(first, collect(v))
+    function __kwarg_permitted(
+        target_kwargs::Dict{Symbol,Any},
+        has_varkwargs::Bool,
         kwarg_sym::Symbol,
-        expected_type::Type,
+        kwarg_val::Any,
     )
-        for (sym, val) in collect(kwarg_dict)
-            if sym === kwarg_sym
-                return val isa expected_type
-            end
+        # Implementation is same as above except that we use `isa` instead of `<:` since
+        # we have values, not types.
+        return if haskey(target_kwargs, kwarg_sym)
+            kwarg_val isa target_kwargs[kwarg_sym][2]
+        else
+            has_varkwargs
         end
-        return false
     end
 end
 
@@ -241,17 +253,25 @@ function _method_error_hint(expr::Expr, msg, printstyled_kwargs::Tuple)::Expr
 
     # Determine number and types of keyword arguments
     n_kwargs = length(kwarg_exprs)
-    target_kwargtypes = Dict{Symbol,Any}()
+    target_kwargtypes = :(Dict{Symbol,Any}())
     has_varkwargs = false
     for (i, kwarg_expr) in enumerate(kwarg_exprs)
         if kwarg_expr isa Symbol
             # `x`
-            target_kwargtypes[kwarg_expr] = :Any
+            sym, type = kwarg_expr, :Any
+            push!(
+                target_kwargtypes.args,
+                Expr(:call, :(=>), QuoteNode(sym), :((true, $(esc(type))))),
+            )
         elseif kwarg_expr.head === :(::)
             # `x::T`
             length(kwarg_expr.args) == 2 ||
                 error("keyword argument type specification must be of the form `x::T`")
-            target_kwargtypes[kwarg_expr.args[1]] = :($(esc(kwarg_expr.args[2])))
+            sym, type = kwarg_expr.args[1], kwarg_expr.args[2]
+            push!(
+                target_kwargtypes.args,
+                Expr(:call, :(=>), QuoteNode(sym), :((true, $(esc(type))))),
+            )
         elseif kwarg_expr.head === :(...)
             if i == n_kwargs
                 has_varkwargs = true
@@ -260,37 +280,61 @@ function _method_error_hint(expr::Expr, msg, printstyled_kwargs::Tuple)::Expr
                 error("`...` can only appear in the final keyword argument")
             end
         elseif kwarg_expr.head === :kw
-            error(
-                "default keyword arguments should not be specified in `@method_error_hint`; only types for keyword arguments are permitted",
+            first_arg = kwarg_expr.args[1]
+            sym, type = if first_arg isa Symbol
+                # `x=default`
+                first_arg, :Any
+            elseif first_arg isa Expr && first_arg.head === :(::)
+                # `x::T=default`
+                length(first_arg.args) == 2 ||
+                    error("unsupported keyword argument expression: $kwarg_expr")
+                first_arg.args
+            else
+                error("unsupported keyword argument expression: $kwarg_expr")
+            end
+            push!(
+                target_kwargtypes.args,
+                Expr(:call, :(=>), QuoteNode(sym), :((false, $(esc(type))))),
             )
+        else
+            error("unsupported keyword argument expression: $kwarg_expr")
         end
     end
     @gensym kwargs
-    kwarg_length_check_expr =
-        has_varkwargs ? :(length($kwargs) >= $n_kwargs - 1) :
-        :(length($kwargs) == $n_kwargs)
     # Check that all the expected keyword arguments (in `target_kwargtypes`) were
     # present in the function call, and have the correct types.
-    kwarg_type_check_expr = if isempty(target_kwargtypes)
-        :(true)
-    else
-        satisfies_exprs = map(collect(target_kwargtypes)) do (target_sym, target_type)
-            :(__kwarg_matches_type($kwargs, $(QuoteNode(target_sym)), $target_type))
-        end
-        foldl((a, b) -> :($a && $b), satisfies_exprs)
-    end
+    # kwarg_type_check_expr = if isempty(target_kwargtypes)
+    #     :(true)
+    # else
+    #     quote
+    #         all(map(collect($kwargs)) do (sym, type_or_val)
+    #             __kwarg_permitted(target_kwargtypes, $has_varkwargs, sym, type_or_val)
+    #         end)
+    #     end
+    # end
 
     # Construct the expression
     return quote
         Base.Experimental.register_error_hint(
             Base.MethodError,
-        ) do io, exc, $argtypes, $kwargs
+        ) do io, exc, $argtypes, kwargs
+            target_kwargtypes = $target_kwargtypes
+            kwargs_symbols = __kwargs_symbols(kwargs)
             is_target_method = (
                 ($fname_check_expr) &&
                 ($arg_length_check_expr) &&
                 ($arg_type_check_expr) &&
-                ($kwarg_length_check_expr) &&
-                ($kwarg_type_check_expr)
+                # all the given kwargs are allowed to be present (i.e., they are either
+                # specified in the method signature, or the method signature has
+                # `kwargs...`)
+                all(collect(kwargs)) do (sym, type_or_val)
+                    __kwarg_permitted(target_kwargtypes, $has_varkwargs, sym, type_or_val)
+                end &&
+                # all the required kwargs (i.e., those specified in the method signature
+                # without a default value) are present
+                all(collect(target_kwargtypes)) do (sym, (is_required, _))
+                    !is_required || sym in kwargs_symbols
+                end
             )
             if is_target_method
                 println(io)

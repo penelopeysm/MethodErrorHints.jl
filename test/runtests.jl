@@ -13,6 +13,8 @@ If `contains` is true, the test checks that the error message does contain `msg`
 it checks that the error message does not contain `msg`.
 """
 function test_throws_with(msg, f; contains)
+    sence = contains ? "presence" : "absence "
+    @info "checking for $(sence) of `$msg`"
     try
         f()
     catch e
@@ -117,6 +119,20 @@ end
         test_throws_with(m, () -> fookw(1); contains = false)
     end
 
+    @testset "; x=default" begin
+        function fookwdef end
+        m = "__fookwdef__x__Any__"
+        @method_error_hint fookwdef(; x = 3) m
+        test_throws_with(m, () -> fookwdef(; x = 1); contains = true)
+        test_throws_with(m, () -> fookwdef(; x = 2.0); contains = true)
+        test_throws_with(m, () -> fookwdef(; x = "hello"); contains = true)
+        test_throws_with(m, () -> fookwdef(; x = []); contains = true)
+        test_throws_with(m, () -> fookwdef(; x = 1, y = 1); contains = false)
+        test_throws_with(m, () -> fookwdef(; y = 1); contains = false)
+        test_throws_with(m, () -> fookwdef(); contains = true)
+        test_throws_with(m, () -> fookwdef(1); contains = false)
+    end
+
     @testset "; x::T" begin
         function fookw2 end
         m = "__fookw2__x__Int__"
@@ -130,6 +146,20 @@ end
         test_throws_with(m, () -> fookw2(1); contains = false)
     end
 
+    @testset "; x=default" begin
+        function fookw2def end
+        m = "__fookw2def__x__Int__"
+        @method_error_hint fookw2def(; x::Int = 3) m
+        test_throws_with(m, () -> fookw2def(; x = 1); contains = true)
+        test_throws_with(m, () -> fookw2def(; x = 2.0); contains = false)
+        test_throws_with(m, () -> fookw2def(; x = "hello"); contains = false)
+        test_throws_with(m, () -> fookw2def(; x = []); contains = false)
+        test_throws_with(m, () -> fookw2def(; x = 1, y = 1); contains = false)
+        test_throws_with(m, () -> fookw2def(; y = 1); contains = false)
+        test_throws_with(m, () -> fookw2def(); contains = true)
+        test_throws_with(m, () -> fookw2def(1); contains = false)
+    end
+
     @testset "; kwargs..." begin
         function fookw3 end
         m = "__fookw3__kwargs__...__"
@@ -141,5 +171,20 @@ end
         test_throws_with(m, () -> fookw3(; x = 2.0); contains = false)
         test_throws_with(m, () -> fookw3(); contains = false)
         test_throws_with(m, () -> fookw3(1); contains = false)
+    end
+
+    @testset "; kwargs..." begin
+        function fookw4 end
+        m = "__fookw4__kwargs__...__"
+        @method_error_hint fookw4(; x::Int, y = 4, kwargs...) m
+        test_throws_with(m, () -> fookw4(; x = 1); contains = true)
+        test_throws_with(m, () -> fookw4(; x = 1, y = 2); contains = true)
+        test_throws_with(m, () -> fookw4(; x = 1, y = 2.0); contains = true)
+        test_throws_with(m, () -> fookw4(; y = "hello"); contains = false)
+        test_throws_with(m, () -> fookw4(; x = 2.0); contains = false)
+        test_throws_with(m, () -> fookw4(; z = :a); contains = false)
+        test_throws_with(m, () -> fookw4(; x = 3, z = :a); contains = true)
+        test_throws_with(m, () -> fookw4(); contains = false)
+        test_throws_with(m, () -> fookw4(1); contains = false)
     end
 end
