@@ -2,3 +2,6 @@ name = "MethodErrorHints"
 uuid = "cb8a39db-c5a3-49c6-80d9-0567c34a633f"
 authors = ["Penelope Yong <penelopeysm@gmail.com>"]
 version = "0.1.0"
+
+[compat]
+julia = "1.6"
