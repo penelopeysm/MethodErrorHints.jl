@@ -10,8 +10,24 @@ macro method_error_hint(args...)
     return _method_error_hint(expr, msg, printstyled_kwargs)
 end
 
+# The kwargs passed into `register_error_hint` are a list of (symbol, type) tuples
+# (but they have type Vector{Any})
+function __kwarg_matches_type(
+    kwarg_list::Vector{Any},
+    kwarg_sym::Symbol,
+    expected_type::Type,
+)
+    for (sym, type) in kwarg_list
+        if sym === kwarg_sym
+            return type <: expected_type
+        end
+    end
+    return false
+end
+
 function _method_error_hint(expr::Expr, msg::String, printstyled_kwargs::Tuple)::Expr
     # Input validation
+    # TODO: Type parameters don't work e.g. `f(x::T, y::T) where {T}`
     expr.head === :call || error("@method_error_hint must be applied to a function call")
     length(expr.args) == 1 && error(
         "@method_error_hint must be applied to a function call with at least one argument",
@@ -46,7 +62,7 @@ function _method_error_hint(expr::Expr, msg::String, printstyled_kwargs::Tuple):
     (arg_exprs, kwarg_exprs) = if has_kwargs
         expr.args[3:end], expr.args[2].args
     else
-        expr.args[2:end], nothing
+        expr.args[2:end], ()
     end
 
     # Determine number and types of arguments
@@ -61,9 +77,11 @@ function _method_error_hint(expr::Expr, msg::String, printstyled_kwargs::Tuple):
             # `x::T`
             push!(target_argtypes, :($(esc(arg_expr.args[2]))))
         elseif arg_expr.head === :(...)
+            # `args...`
+            # TODO: Vararg{T} not supported I think
             if i == nargs
                 has_varargs = true
-                nargs -= 1  # Not a true argument
+                continue
             else
                 error("`...` can only appear in the last position")
             end
@@ -73,29 +91,69 @@ function _method_error_hint(expr::Expr, msg::String, printstyled_kwargs::Tuple):
     end
     @gensym argtypes
     arg_length_check_expr =
-        has_varargs ? :(length($argtypes) >= $nargs) : :(length($argtypes) == $nargs)
-    function make_arg_type_check_expr(argtypes_sym::Symbol)
-        if isempty(target_argtypes)
-            return :(true)
-        else
-            satisfies_exprs = map(eachindex(target_argtypes)) do i
-                :($argtypes_sym[$i] <: $(target_argtypes[i]))
-            end
-            return foldl((a, b) -> :($a && $b), satisfies_exprs)
+        has_varargs ? :(length($argtypes) >= $nargs - 1) : :(length($argtypes) == $nargs)
+    arg_type_check_expr = if isempty(target_argtypes)
+        :(true)
+    else
+        satisfies_exprs = map(eachindex(target_argtypes)) do i
+            :($argtypes[$i] <: $(target_argtypes[i]))
         end
+        foldl((a, b) -> :($a && $b), satisfies_exprs)
     end
-    arg_type_check_expr = make_arg_type_check_expr(argtypes)
 
     # TODO: Handle kwargs
-    # @show kwarg_exprs
+    @show kwarg_exprs
+
+    n_kwargs = length(kwarg_exprs)
+    target_kwargtypes = Dict{Symbol,Any}()
+    has_varkwargs = false
+    for (i, kwarg_expr) in enumerate(kwarg_exprs)
+        if kwarg_expr isa Symbol
+            # `x`
+            target_kwargtypes[kwarg_expr] = :Any
+        elseif kwarg_expr.head === :(::)
+            # `x::T`
+            target_kwargtypes[kwarg_expr.args[1]] = :($(esc(kwarg_expr.args[2])))
+        elseif kwarg_expr.head === :(...)
+            if i == n_kwargs
+                has_varkwargs = true
+                continue
+            else
+                error("`...` can only appear in the final keyword argument")
+            end
+        elseif kwarg_expr.head === :kw
+            error(
+                "default keyword arguments should not be specified in `@method_error_hint`; only types for keyword arguments are permitted",
+            )
+        end
+    end
+    @gensym kwargs
+    kwarg_length_check_expr =
+        has_varkwargs ? :(length($kwargs) >= $n_kwargs - 1) :
+        :(length($kwargs) == $n_kwargs)
+    # Check that all the expected keyword arguments (in `target_kwargtypes`) were
+    # present in the function call, and have the correct types.
+    kwarg_type_check_expr = if isempty(target_kwargtypes)
+        :(true)
+    else
+        satisfies_exprs = map(collect(target_kwargtypes)) do (target_sym, target_type)
+            :(__kwarg_matches_type($kwargs, $(QuoteNode(target_sym)), $target_type))
+        end
+        foldl((a, b) -> :($a && $b), satisfies_exprs)
+    end
 
     # Construct the expression
     return quote
         Base.Experimental.register_error_hint(
             Base.MethodError,
-        ) do io, exc, $argtypes, kwargs
-            is_target_method =
-                (($fname_check_expr) && ($arg_length_check_expr) && ($arg_type_check_expr))
+        ) do io, exc, $argtypes, $kwargs
+            is_target_method = (
+                ($fname_check_expr) &&
+                ($arg_length_check_expr) &&
+                ($arg_type_check_expr) &&
+                ($kwarg_length_check_expr) &&
+                ($kwarg_type_check_expr)
+            )
             if is_target_method
                 # TODO: are the kwargs correct here?
                 println(io)
