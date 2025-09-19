@@ -13,13 +13,22 @@ end
 function _method_error_hint(expr::Expr, msg::String, printstyled_kwargs::Tuple)::Expr
     # Input validation
     expr.head === :call || error("@method_error_hint must be applied to a function call")
-    length(expr.args) == 1 && error("@method_error_hint must be applied to a function call with at least one argument")
+    length(expr.args) == 1 && error(
+        "@method_error_hint must be applied to a function call with at least one argument",
+    )
 
     # Wrangle the keyword arguments to be forwarded to `printstyled`
     ps_kwargs_dict = :(Dict{Symbol,Any}())
     for ps_kwarg in printstyled_kwargs
-        if !(ps_kwarg isa Expr && ps_kwarg.head === :(=) && length(ps_kwarg.args) == 2 && ps_kwarg.args[1] isa Symbol)
-            error("additional arguments to @method_error_hint must be keyword arguments passed to `printstyled`, but got `$ps_kwarg`")
+        if !(
+            ps_kwarg isa Expr &&
+            ps_kwarg.head === :(=) &&
+            length(ps_kwarg.args) == 2 &&
+            ps_kwarg.args[1] isa Symbol
+        )
+            error(
+                "additional arguments to @method_error_hint must be keyword arguments passed to `printstyled`, but got `$ps_kwarg`",
+            )
         else
             # This bit was quite hard to figure out ... I copied the code from Test.jl
             # https://github.com/JuliaLang/julia/blob/12f7bb52e5714c577189665a05606e3764f333cf/stdlib/Test/src/Test.jl#L2092-L2096
@@ -63,7 +72,8 @@ function _method_error_hint(expr::Expr, msg::String, printstyled_kwargs::Tuple):
         end
     end
     @gensym argtypes
-    arg_length_check_expr = has_varargs ? :(length($argtypes) >= $nargs) : :(length($argtypes) == $nargs)
+    arg_length_check_expr =
+        has_varargs ? :(length($argtypes) >= $nargs) : :(length($argtypes) == $nargs)
     function make_arg_type_check_expr(argtypes_sym::Symbol)
         if isempty(target_argtypes)
             return :(true)
@@ -81,14 +91,11 @@ function _method_error_hint(expr::Expr, msg::String, printstyled_kwargs::Tuple):
 
     # Construct the expression
     return quote
-        Base.Experimental.register_error_hint(Base.MethodError) do io, exc, $argtypes, kwargs
-            is_target_method = (
-                ($fname_check_expr)
-                &&
-                ($arg_length_check_expr)
-                &&
-                ($arg_type_check_expr)
-            )
+        Base.Experimental.register_error_hint(
+            Base.MethodError,
+        ) do io, exc, $argtypes, kwargs
+            is_target_method =
+                (($fname_check_expr) && ($arg_length_check_expr) && ($arg_type_check_expr))
             if is_target_method
                 # TODO: are the kwargs correct here?
                 println(io)
