@@ -46,6 +46,12 @@ Here, ✔ indicates an invocation that will trigger the hint, and ✘ indicates 
 not. For the most part, the rules exactly mimic method dispatch in Julia, with some small
 exceptions noted in the next section.
 
+In this first example, `f1` must be called with two positional arguments and a keyword
+argument `z` that have precisely the types specified, plus a keyword argument `z`. Names of
+positional arguments are optional as long as a type is specified, but names of keyword
+arguments are mandatory. If a positional argument is untyped like `y` here, it is treated as
+`Any`.
+
 ```julia
 function f1 end
 @method_error_hint f1(x::Int, y; z::String) "My error hint" color=:red
@@ -58,6 +64,11 @@ function f1 end
 # f1(3,   :a ; z="hello", w=1) ✘ (extra keyword argument)
 ```
 
+Here, `f2` must take a single positional argument of any type, and optionally a keyword
+argument `z`. If `z` is provided, it must be of type `Int`. The macro does not actually use
+the default value specified for the keyword argument; you can use `undef` to avoid
+specifying one.
+
 ```julia
 function f2 end
 @method_error_hint f2(x; z::Int=3) "Another error hint" bold=true
@@ -67,6 +78,8 @@ function f2 end
 # f2(3, :a            )  ✘ (extra positional argument)
 # f2(3, :a ; z=2      )  ✘ (extra positional argument)
 ```
+
+Variable-length positional and keyword arguments are supported.
 
 ```julia
 function f3 end
@@ -95,27 +108,46 @@ This macro's only real job is to parse the method signature, and then generate a
 tried to invoke matches the signature. This is best illustrated by an example. This:
 
 ```julia
+function f1 end
 @method_error_hint f1(x::Int, y; z::String) "My error hint" color=:red
 ```
 
-expands into something like this (modulo variable names and other trivial differences):
+expands into something like this:
 
 ```julia
 Base.Experimental.register_error_hint(MethodError) do io, exc, argtypes, kwargs
-    is_target_method = (
+    # This Dict is parsed from the method signature passed to the macro, i.e., this is the
+    # 'target' signature we are trying to match. The boolean here indicates whether the
+    # keyword argument must be present in the invocation (i.e., it has no default value).
+    target_kwargs = Dict{Symbol,Any}(:z => (true, String))
+    # This Bool is also parsed from the method signature, and indicates whether the
+    # method signature has `kwargs...`
+    has_varkwargs = false
+    # Extract the actual symbols of the keyword arguments passed in the invocation
+    kwarg_symbols = __kwargs_symbols(kwargs)
+    if (
+        # Check that the function name is correct
         exc.f === f1
+        # Check that number of positional arguments is correct
         && length(argtypes) == 2
+        # Check that types of positional arguments are correct
         && argtypes[1] <: Int
         && argtypes[2] <: Any
-        && length(kwargs) == 1
-        && MethodErrorHints.__kwarg_permitted(kwargs, :z, String)
+        # Check that any mandatory keyword arguments are present (i.e., if there is no
+        # default value in the method signature, it must be present in the invocation)
+        && haskey(kwargs, :z) && kwargs[:z] isa String
+        # Check that no unexpected keyword arguments are present (i.e., any keyword argument
+        # in the invocation must either be specified in the method signature, or the method
+        # signature must have `kwargs...`)
+        && all(s -> (haskey(target_kwargs, s) || has_varkwargs), __kwarg_symbols(kwargs))
     )
-    if is_target_method
-        println(io)
         printstyled(io, "My error hint"; :color=:red)
     end
 end
 ```
+
+The actual code generated for keyword argument checking is a bit more complicated than shown
+here. It would be nice to simplify this in the future.
 
 If you would like to see this in more detail, please refer to [the source code of this
 package](https://github.com/penelopeysm/MethodErrorHints.jl).
