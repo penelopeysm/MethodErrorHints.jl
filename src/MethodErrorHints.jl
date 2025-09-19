@@ -29,9 +29,16 @@ suggestions in its docstring are also applicable here.
 
 For example, this macro should be called within the `__init__` function of a module, to
 ensure that the hint is registered when the module is loaded. Furthermore, since this is 
-an experimental Julia feature, if you wish to guard against breakage you should enclose
-calls to this macro inside an `if isdefined(Base.Experimental, :register_error_hint) ...
-end` block.
+an experimental Julia feature, if you wish to guard against breakage you should gate
+calls to this macro behind `if isdefined(Base.Experimental, :register_error_hint)`.
+
+```julia
+if isdefined(Base.Experimental, :register_error_hint)
+    function __init__()
+        @method_error_hint f1(x::Int, y; z::String) "My error hint" color=:red
+    end
+end
+```
 
 # Examples
 
@@ -80,7 +87,7 @@ exceptions noted in the next section.
 
 ## Behind the scenes
 
-This macro's only real job is to parse the method signature and generate a call to
+This macro's only real job is to parse the method signature, and then generate a call to
 [`Base.Experimental.register_error_hint`](@extref) that checks that the method the user
 tried to invoke matches the signature. This is best illustrated by an example. This:
 
@@ -92,7 +99,14 @@ expands into something like this (modulo variable names and other trivial differ
 
 ```julia
 Base.Experimental.register_error_hint(MethodError) do io, exc, argtypes, kwargs
-    is_target_method = exc.f === f1 && length(argtypes) == 2 && argtypes[1] <: Int && argtypes[2] <: MethodErrorHints.Any && length(kwargs) == 1 && MethodErrorHints.__kwarg_matches_type(kwargs, :z, String)
+    is_target_method = (
+        exc.f === f1
+        && length(argtypes) == 2
+        && argtypes[1] <: Int
+        && argtypes[2] <: Any
+        && length(kwargs) == 1
+        && MethodErrorHints.__kwarg_matches_type(kwargs, :z, String)
+    )
     if is_target_method
         println(io)
         printstyled(io, "My error hint"; :color=:red)
