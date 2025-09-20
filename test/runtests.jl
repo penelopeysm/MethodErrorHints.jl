@@ -51,6 +51,7 @@ end
             test_throws_with(m, () -> foo1([]); contains = false)
             test_throws_with(m, () -> foo1(); contains = false)
             test_throws_with(m, () -> foo1(1, 1); contains = false)
+            test_throws_with(m, () -> foo1(1; x = 1); contains = false)
         end
 
         @testset "custom types" begin
@@ -64,6 +65,7 @@ end
             test_throws_with(m, () -> foo1t([]); contains = false)
             test_throws_with(m, () -> foo1t(); contains = false)
             test_throws_with(m, () -> foo1t(1, 1); contains = false)
+            test_throws_with(m, () -> foo1t(T(); x = 1); contains = false)
         end
     end
 
@@ -77,6 +79,7 @@ end
         test_throws_with(m, () -> foo2([]); contains = false)
         test_throws_with(m, () -> foo2(); contains = false)
         test_throws_with(m, () -> foo2(1, 1); contains = false)
+        test_throws_with(m, () -> foo2(1; x = 1); contains = false)
     end
 
     @testset "x" begin
@@ -89,6 +92,7 @@ end
         test_throws_with(m, () -> foo3([]); contains = true)
         test_throws_with(m, () -> foo3(); contains = false)
         test_throws_with(m, () -> foo3(1, 1); contains = false)
+        test_throws_with(m, () -> foo3(1; x = 1); contains = false)
     end
 
     @testset "args..." begin
@@ -96,6 +100,7 @@ end
         m = "__foo4__args__...__"
         @method_error_hint foo4(::Int, args...) m
         test_throws_with(m, () -> foo4(1, 1); contains = true)
+        test_throws_with(m, () -> foo4(1, 1, :a); contains = true)
         test_throws_with(m, () -> foo4(1, 2.0); contains = true)
         test_throws_with(m, () -> foo4(1, "hello"); contains = true)
         test_throws_with(m, () -> foo4(1, []); contains = true)
@@ -103,6 +108,24 @@ end
         test_throws_with(m, () -> foo4(1, :s, :t); contains = true)
         test_throws_with(m, () -> foo4(); contains = false)
         test_throws_with(m, () -> foo4(2.0); contains = false)
+        test_throws_with(m, () -> foo4(1, 1; x = 1); contains = false)
+    end
+
+    @testset "args::T..." begin
+        function foo5 end
+        m = "__foo5__args__T__...__"
+        @method_error_hint foo5(::Int, args::Symbol...) m
+        test_throws_with(m, () -> foo5(1, :a); contains = true)
+        test_throws_with(m, () -> foo5(1, :a, :b); contains = true)
+        test_throws_with(m, () -> foo5(1); contains = true)
+        test_throws_with(m, () -> foo5(1, 2.0); contains = false)
+        test_throws_with(m, () -> foo5(1, "hello"); contains = false)
+        test_throws_with(m, () -> foo5(1); contains = true)
+        test_throws_with(m, () -> foo5(); contains = false)
+        test_throws_with(m, () -> foo5(2.0); contains = false)
+        test_throws_with(m, () -> foo5(2.0, :a, :b); contains = false)
+        test_throws_with(m, () -> foo5(2; x = 2); contains = false)
+        test_throws_with(m, () -> foo5(2, :a; x = 2); contains = false)
     end
 
     @testset "; x" begin
@@ -186,5 +209,17 @@ end
         test_throws_with(m, () -> fookw4(; x = 3, z = :a); contains = true)
         test_throws_with(m, () -> fookw4(); contains = false)
         test_throws_with(m, () -> fookw4(1); contains = false)
+    end
+
+    @testset "undefined function" begin
+        # Make sure that if @method_error_hint is applied to a non-existent function, it
+        # doesn't cause crashes when checking against the function.
+        function this_is_defined end
+        m = "__undefinedfunc__x__Int__"
+        @method_error_hint undefinedfunc(x::Int) m
+        # This will throw a MethodError. It won't cause the error hint to print, but 
+        # the code in the expanded macro will run, and we would like to make sure it
+        # doesn't crash.
+        test_throws_with(m, () -> this_is_defined(); contains = false)
     end
 end

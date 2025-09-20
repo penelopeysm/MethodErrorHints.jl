@@ -89,15 +89,24 @@ function f3 end
 
 # Known limitations
 
-- `Vararg` annotations on splatted positional arguments are not supported. This will probably
-  be fixed in a future version.
+Please note that these are unlikely to be fixed in the future.
 
 - Type parameters and `where`-clauses are not supported, for example `f(x::T, y::T) where
-  {T}`. If you need this functionality, you should consider crafting your own error hint
-  (for this particular signature, following the example in the docstring of
-  [`Base.Experimental.register_error_hint`](@extref), you could check that `length(argtypes)
-  == 2 && argtypes[1] == argtypes[2]`). Support for type parameters will probably never be
-  implemented in this package.
+  {T}`.
+
+- `Vararg` annotations are not supported. (But annotations on splatted arguments, like
+  `args::Int...`, are supported.)
+
+If you need this functionality, you should probably craft your own error hint using
+[`Base.Experimental.register_error_hint`](@extref). For example, the method signature
+`f(x::T, y::T) where {T}` could be implemented as follows:
+
+```julia
+Base.Experimental.register_error_hint(MethodError) do io, exc, argtypes, kwargs
+    if exc.f === f && length(argtypes) == 2 && argtypes[1] == argtypes[2]
+        printstyled(io, "My error hint"; color=:red)
+    end
+end
 
 # Extended help
 
@@ -213,6 +222,9 @@ function _method_error_hint(expr::Expr, msg, printstyled_kwargs::Tuple)::Expr
 
     # Get the function name
     fname = expr.args[1]
+    # Check that the function name is defined; if it's not defined then the error hint
+    # itself will throw an error
+    fname_defined_expr = Expr(:isdefined, esc(fname))
     fname_check_expr = :(exc.f === $(esc(fname)))
 
     # Decide which arguments of `expr` are positional and which are keyword. If keyword
@@ -232,6 +244,7 @@ function _method_error_hint(expr::Expr, msg, printstyled_kwargs::Tuple)::Expr
     # Determine number and types of arguments
     nargs = length(arg_exprs)
     has_varargs = false
+    vararg_type = :Any
     target_argtypes = Any[]
     for (i, arg_expr) in enumerate(arg_exprs)
         if arg_expr isa Symbol
@@ -242,9 +255,13 @@ function _method_error_hint(expr::Expr, msg, printstyled_kwargs::Tuple)::Expr
             push!(target_argtypes, :($(esc(last(arg_expr.args)))))
         elseif arg_expr.head === :(...)
             # `args...`
-            # TODO: Vararg{T} not supported I think
             if i == nargs
                 has_varargs = true
+                vararg_type = if arg_expr.args[1] isa Symbol
+                    :Any
+                else
+                    :($(esc(last(arg_expr.args[1].args))))
+                end
                 continue
             else
                 error("`...` can only appear in the last position")
@@ -264,6 +281,8 @@ function _method_error_hint(expr::Expr, msg, printstyled_kwargs::Tuple)::Expr
         end
         foldl((a, b) -> :($a && $b), satisfies_exprs)
     end
+    vararg_type_check_expr =
+        has_varargs ? :(all($argtypes[$nargs:end] .<: $vararg_type)) : :(true)
 
     # Determine number and types of keyword arguments
     n_kwargs = length(kwarg_exprs)
@@ -337,9 +356,11 @@ function _method_error_hint(expr::Expr, msg, printstyled_kwargs::Tuple)::Expr
             target_kwargtypes = $target_kwargtypes
             $kwargs_symbols = __kwargs_symbols(kwargs)
             if (
+                ($fname_defined_expr) &&
                 ($fname_check_expr) &&
                 ($arg_length_check_expr) &&
                 ($arg_type_check_expr) &&
+                ($vararg_type_check_expr) &&
                 # all the given kwargs are allowed to be present (i.e., they are either
                 # specified in the method signature with a type that matches the one
                 # passed in the invocation, or the method signature has `kwargs...`). Note
