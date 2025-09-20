@@ -272,7 +272,7 @@ function _method_error_hint(expr::Expr, msg, printstyled_kwargs::Tuple)::Expr
     end
     @gensym argtypes
     arg_length_check_expr =
-        has_varargs ? :(length($argtypes) >= $nargs - 1) : :(length($argtypes) == $nargs)
+        has_varargs ? :(length($argtypes) >= $(nargs - 1)) : :(length($argtypes) == $nargs)
     arg_type_check_expr = if isempty(target_argtypes)
         :(true)
     else
