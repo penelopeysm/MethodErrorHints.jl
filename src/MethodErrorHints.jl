@@ -149,6 +149,7 @@ Base.Experimental.register_error_hint(MethodError) do io, exc, argtypes, kwargs
                 has_varkwargs
             end
         end
+    )
         printstyled(io, "My error hint"; :color=:red)
     end
 end
