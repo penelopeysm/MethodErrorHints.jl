@@ -125,6 +125,7 @@ Base.Experimental.register_error_hint(MethodError) do io, exc, argtypes, kwargs
         printstyled(io, "My error hint"; color=:red)
     end
 end
+```
 
 # Extended help
 
