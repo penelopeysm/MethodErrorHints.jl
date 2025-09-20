@@ -164,17 +164,10 @@ macro method_error_hint(args...)
     return _method_error_hint(expr, msg, printstyled_kwargs)
 end
 
-# There are two functions in this block.
-#
 # The role of `__kwargs_symbols` is to extract the symbols of the keyword arguments in the
 # actual function invocation. This requires us to process the `kwargs` argument of
 # `register_error_hint(...) do io, exc, argtypes, kwargs`. The type and contents of this
 # argument differ on different Julia versions, hence this if/else.
-#
-# The role of `__kwarg_permitted` is to check whether a given keyword argument in the
-# function invocation is allowed given the target method signature. Essentially, it is
-# allowed either if it is explicitly specified in the target signature (and it has the
-# correct type), or if the target signature has `kwargs...`.
 @static if VERSION >= v"1.11"
     # On Julia 1.11, the `kwargs` obtained from `register_error_hint` are a list of
     # `(symbol, type)` tuples (but they have type Vector{Any}).
