@@ -27,9 +27,9 @@ see the documentation of [`Base.printstyled`](@extref) for the available options
 This function uses [`Base.Experimental.register_error_hint`](@extref), and thus all the
 suggestions in its docstring are also applicable here.
 
-For example, this macro should be called within the `__init__` function of a module, to
-ensure that the hint is registered when the module is loaded. Furthermore, since this is 
-an experimental Julia feature, if you wish to guard against breakage you should gate
+For example, this macro should be called within the [`__init__`](@extref) function of a
+module, to ensure that the hint is registered when the module is loaded. Furthermore, since
+this is an experimental Julia feature, if you wish to guard against breakage you should gate
 calls to this macro behind `if isdefined(Base.Experimental, :register_error_hint)`.
 
 ```julia
@@ -141,7 +141,7 @@ Base.Experimental.register_error_hint(MethodError) do io, exc, argtypes, kwargs
         # in the invocation must either be specified in the method signature and obey the
         # type specified in the signature, or the method signature must have `kwargs...`).
         && all(collect(kwargs)) do (sym, typ)
-            if haskey(target_kwargtypes, s)
+            if haskey(target_kwargtypes, sym)
                 # On Julia <= 1.10 we get values instead of types so we have to use `isa`
                 # instead of `<:`
                 typ <: target_kwargtypes[sym]
