@@ -19,6 +19,10 @@ concurrency:
 jobs:
   test:
     runs-on: ${{ matrix.runner.os }}
+    # The test suite is super short and typically takes < 1 minute. If it takes
+    # > 5 minutes it probably got hung on a failing test (e.g. an error that's
+    # thrown inside the error hint itself)
+    timeout-minutes: 5
     strategy:
       fail-fast: false
 
