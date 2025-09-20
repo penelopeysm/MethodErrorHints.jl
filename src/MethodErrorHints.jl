@@ -1,11 +1,9 @@
 """
     MethodErrorHints.jl
 
-A Julia package providing a macro to register custom hint messages for `MethodError`s.
-
-This package exports a single macro, [`@method_error_hint`](@ref), which allows you to
-register custom hint messages to be displayed when a `MethodError` is thrown for a function
-call.
+This package exports a single macro, [`@method_error_hint`](@ref). It provides a convenient
+way of registering custom error hints, which are displayed when a `MethodError` is thrown
+for a particular function signature.
 """
 module MethodErrorHints
 
@@ -13,7 +11,7 @@ module MethodErrorHints
     @method_error_hint sig (msg::AbstractString) [key=val...]
 
 Register a hint message `msg` to be printed when a `MethodError` is thrown for a function
-call matching the signature `sig`. `msg` must be an `AbstractString`.
+call matching the signature `sig`.
 
 The signature `sig` is specified in a similar way to a typical method definition in Julia.
 See below for examples.
@@ -48,6 +46,17 @@ if isdefined(Base.Experimental, :register_error_hint)
     end
 end
 ```
+
+Since you can pass either a message or a function to this macro, the following are
+equivalent:
+
+```julia
+@method_error_hint f1(x::Int, y; z::String) "My error hint" color=:red
+@method_error_hint f1(x::Int, y; z::String) (io -> printstyled(io, "My error hint"; color=:red))
+```
+
+with the latter allowing more flexibility, but being more verbose for the most common use
+case.
 
 # Examples
 
