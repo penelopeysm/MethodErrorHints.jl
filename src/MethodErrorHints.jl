@@ -42,7 +42,7 @@ calls to this macro behind `if isdefined(Base.Experimental, :register_error_hint
 ```julia
 if isdefined(Base.Experimental, :register_error_hint)
     function __init__()
-        @method_error_hint f1(x::Int, y; z::String) "My error hint" color=:red
+        @method_error_hint f(x::Int, y; z::String) "My error hint" color=:red
     end
 end
 ```
@@ -51,8 +51,8 @@ Since you can pass either a message or a function to this macro, the following a
 equivalent:
 
 ```julia
-@method_error_hint f1(x::Int, y; z::String) "My error hint" color=:red
-@method_error_hint f1(x::Int, y; z::String) (io -> printstyled(io, "My error hint"; color=:red))
+@method_error_hint f(x::Int, y; z::String) "My error hint" color=:red
+@method_error_hint f(x::Int, y; z::String) (io -> printstyled(io, "My error hint"; color=:red))
 ```
 
 with the latter allowing more flexibility, but being more verbose for the most common use
