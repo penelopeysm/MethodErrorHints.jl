@@ -292,6 +292,13 @@ function _method_error_hint(expr::Expr, msg, printstyled_kwargs::Tuple)::Expr
     @gensym argtypes
     arg_length_check_expr =
         has_varargs ? :(length($argtypes) >= $(nargs - 1)) : :(length($argtypes) == $nargs)
+    arg_type_defined_expr = if isempty(target_argtypes)
+        :(true)
+    else
+        foldl((a, b) -> :($a && $b), map(target_argtypes) do argtype
+            Expr(:isdefined, :($argtype))
+        end)
+    end
     arg_type_check_expr = if isempty(target_argtypes)
         :(true)
     else
@@ -306,6 +313,7 @@ function _method_error_hint(expr::Expr, msg, printstyled_kwargs::Tuple)::Expr
     # Determine number and types of keyword arguments
     n_kwargs = length(kwarg_exprs)
     target_kwargtypes = :(Dict{Symbol,Any}())
+    unescaped_kwargtypes = Symbol[]
     mandatory_kwargs = Symbol[]
     has_varkwargs = false
     for (i, kwarg_expr) in enumerate(kwarg_exprs)
@@ -313,6 +321,7 @@ function _method_error_hint(expr::Expr, msg, printstyled_kwargs::Tuple)::Expr
             # `x`
             sym, type = kwarg_expr, :Any
             push!(target_kwargtypes.args, Expr(:call, :(=>), QuoteNode(sym), esc(type)))
+            push!(unescaped_kwargtypes, type)
             push!(mandatory_kwargs, sym)
         elseif kwarg_expr.head === :(::)
             # `x::T`
@@ -320,6 +329,7 @@ function _method_error_hint(expr::Expr, msg, printstyled_kwargs::Tuple)::Expr
                 error("keyword argument type specification must be of the form `x::T`")
             sym, type = kwarg_expr.args[1], kwarg_expr.args[2]
             push!(target_kwargtypes.args, Expr(:call, :(=>), QuoteNode(sym), esc(type)))
+            push!(unescaped_kwargtypes, type)
             push!(mandatory_kwargs, sym)
         elseif kwarg_expr.head === :(...)
             if i == n_kwargs
@@ -342,11 +352,19 @@ function _method_error_hint(expr::Expr, msg, printstyled_kwargs::Tuple)::Expr
                 error("unsupported keyword argument expression: $kwarg_expr")
             end
             push!(target_kwargtypes.args, Expr(:call, :(=>), QuoteNode(sym), esc(type)))
+            push!(unescaped_kwargtypes, type)
         else
             error("unsupported keyword argument expression: $kwarg_expr")
         end
     end
 
+    kwargtype_defined_expr = if isempty(unescaped_kwargtypes)
+        :(true)
+    else
+        foldl((a, b) -> :($a && $b), map(unescaped_kwargtypes) do t
+            Expr(:isdefined, :($(esc(t))))
+        end)
+    end
     @gensym kwargs_symbols
     # This checks that all the mandatory kwargs (i.e., those specified in the method
     # signature without a default value) are present
@@ -372,10 +390,13 @@ function _method_error_hint(expr::Expr, msg, printstyled_kwargs::Tuple)::Expr
         Base.Experimental.register_error_hint(
             Base.MethodError,
         ) do io, exc, $argtypes, kwargs
+            # The `isdefined` checks need to come first, otherwise we can't actually run
+            # things, for example we can't evaluate `target_kwargtypes` in the next line.
+            ($fname_defined_expr && $arg_type_defined_expr && $kwargtype_defined_expr) ||
+                return
             target_kwargtypes = $target_kwargtypes
             $kwargs_symbols = __kwargs_symbols(kwargs)
             if (
-                ($fname_defined_expr) &&
                 ($fname_check_expr) &&
                 ($arg_length_check_expr) &&
                 ($arg_type_check_expr) &&

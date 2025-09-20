@@ -223,6 +223,24 @@ end
         test_throws_with(m, () -> this_is_defined(); contains = false)
     end
 
+    @testset "undefined type" begin
+        # Make sure that if @method_error_hint is applied with a non-existent type, it
+        # doesn't cause crashes when checking against the function.
+
+        @testset "arg" begin
+            function foobadtype end
+            m = "__foobadtype__x__DoesNotExist__"
+            @method_error_hint foobadtype(x::DoesNotExist) m
+            test_throws_with(m, () -> foobadtype(); contains = false)
+        end
+        @testset "kwarg" begin
+            function foobadtype2 end
+            m = "__foobadtype2__x__DoesNotExist__"
+            @method_error_hint foobadtype2(; x::DoesNotExist) m
+            test_throws_with(m, () -> foobadtype2(); contains = false)
+        end
+    end
+
     @testset "with IO handler" begin
         # Try different syntaxes for specifying the function.
         @testset "named function" begin
