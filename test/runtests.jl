@@ -183,6 +183,14 @@ end
         test_throws_with(m, () -> fookw2def(1); contains = false)
     end
 
+    @testset "order of kwargs doesn't matter" begin
+        function fookworder end
+        m = "__fookworder__x__y__"
+        @method_error_hint fookworder(; x, y) m
+        test_throws_with(m, () -> fookworder(; x = 1, y = 2); contains = true)
+        test_throws_with(m, () -> fookworder(; y = 2, x = 1); contains = true)
+    end
+
     @testset "; kwargs..." begin
         function fookw3 end
         m = "__fookw3__kwargs__...__"
