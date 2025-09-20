@@ -222,4 +222,29 @@ end
         # doesn't crash.
         test_throws_with(m, () -> this_is_defined(); contains = false)
     end
+
+    @testset "with IO handler" begin
+        # Try different syntaxes for specifying the function.
+        @testset "named function" begin
+            function fooionamed end
+            m = "__fooionamed__"
+            f = io -> println(io, m)
+            @method_error_hint fooionamed() f
+            test_throws_with(m, () -> fooionamed(); contains = true)
+        end
+        @testset "anonymous function 1" begin
+            function fooioanon1 end
+            m = "__fooioanon1__"
+            @method_error_hint fooioanon1() io -> println(io, m)
+            test_throws_with(m, () -> fooioanon1(); contains = true)
+        end
+        @testset "anonymous function 2" begin
+            function fooioanon2 end
+            m = "__fooioanon2__"
+            @method_error_hint fooioanon2() function (io)
+                print(io, m)
+            end
+            test_throws_with(m, () -> fooioanon2(); contains = true)
+        end
+    end
 end

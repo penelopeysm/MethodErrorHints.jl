@@ -10,10 +10,10 @@ call.
 module MethodErrorHints
 
 """
-    @method_error_hint sig msg [key=val...]
+    @method_error_hint sig (msg::AbstractString) [key=val...]
 
 Register a hint message `msg` to be printed when a `MethodError` is thrown for a function
-call matching the signature `sig`.
+call matching the signature `sig`. `msg` must be an `AbstractString`.
 
 The signature `sig` is specified in a similar way to a typical method definition in Julia.
 See below for examples.
@@ -21,6 +21,15 @@ See below for examples.
 Additional key-value pairs `key=val` are passed to [`Base.printstyled`](@extref) when
 printing the hint message, allowing customization of the appearance of the message. Please
 see the documentation of [`Base.printstyled`](@extref) for the available options.
+
+    @method_error_hint sig (f::Function)
+
+Alternatively, instead of passing a `msg::AbstractString`, you can pass a function `f` that
+takes an IO object as its only argument and performs the printing itself. This allows for
+more flexible formatting of the hint message, for example using multiple calls to
+[`Base.printstyled`](@extref) with different styles.
+
+In this case keyword arguments are still parsed but are silently ignored by the macro.
 
 # Usage
 
@@ -376,7 +385,12 @@ function _method_error_hint(expr::Expr, msg, printstyled_kwargs::Tuple)::Expr
                 end &&
                 ($mandatory_kwargs_present_expr)
             )
-                printstyled(io, $(esc(msg)); $ps_kwargs_dict...)
+                str_or_f = $(esc(msg))
+                if str_or_f isa AbstractString
+                    printstyled(io, str_or_f; $ps_kwargs_dict...)
+                else
+                    str_or_f(io)
+                end
             end
         end
     end
