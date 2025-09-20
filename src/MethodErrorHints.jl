@@ -186,6 +186,8 @@ elseif VERSION >= v"1.6"
     # it's also available as Base.Pairs but not on 1.6, so to cover all these we just use
     # Base.Iterators.Pairs.
     __kwargs_symbols(v::Base.Iterators.Pairs)::Vector{Symbol} = map(first, collect(v))
+    # If there are no kwargs it gives us an empty tuple
+    __kwargs_symbols(::Tuple{})::Vector{Symbol} = Symbol[]
     function __kwarg_permitted(
         target_kwargs::Dict{Symbol,Any},
         has_varkwargs::Bool,

@@ -173,7 +173,7 @@ end
         test_throws_with(m, () -> fookw3(1); contains = false)
     end
 
-    @testset "; kwargs..." begin
+    @testset "a mixture of kwargs" begin
         function fookw4 end
         m = "__fookw4__kwargs__...__"
         @method_error_hint fookw4(; x::Int, y = 4, kwargs...) m
