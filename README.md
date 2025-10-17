@@ -2,7 +2,7 @@
 
 [**Documentation**](https://pysm.dev/MethodErrorHints.jl/)
 
-This package exports a single macro, `@method_error_hint`, which lets you define error hints for specific method signatures.
+This package exports a single macro, `@method_error_hint`, which lets you (more easily) define error hints for specific method signatures.
 
 For example, the code below will print "Hello, world" in blue when `f(1)` is called.
 (GitHub can't show you the coloured output, but if you run this in a Julia REPL you will see it.)
@@ -37,4 +37,4 @@ Stacktrace:
    @ REPL[5]:1
 ```
 
-Please see [the docstring](https://pysm.dev/MethodErrorHints.jl) for more details.
+Please see [the documentation](https://pysm.dev/MethodErrorHints.jl) for more details.
