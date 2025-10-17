@@ -43,6 +43,9 @@ jobs:
           # lts (1.10)
           - version: 'lts'
             os: ubuntu-latest
+          # 1.11 (for good measure)
+          - version: '1.11'
+            os: ubuntu-latest
 
     steps:
       - uses: actions/checkout@v5
